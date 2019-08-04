@@ -16,12 +16,12 @@
 	along with pilight. If not, see	<http://www.gnu.org/licenses/>
 */
 
-#ifndef _PROTOCOL_BYRON_SX_CHIME_H_
-#define _PROTOCOL_BYRON_SX_CHIME_H_
+#ifndef _PROTOCOL_BYRON_BY_CHIME_H_
+#define _PROTOCOL_BYRON_BY_CHIME_H_
 
 #include "../protocol.h"
 
-struct protocol_t* byron_sx_chime;
-void byronSxChimeInit(void);
+struct protocol_t* byron_by_chime;
+void byronByChimeInit(void);
 
 #endif

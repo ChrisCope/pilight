@@ -17,7 +17,7 @@
 */
 
 /*
-   Send and receive protocol for Byron SX doorbell
+   Send and receive protocol for Byron by doorbell
    Format is as follows:
    
    42 pulses
@@ -49,30 +49,25 @@
 #include "../protocol.h"
 #include "../../core/binary.h"
 #include "../../core/gc.h"
-#include "byron_sx_chime.h"
+#include "byron_by_chime.h"
 
-#define PULSE_SHORT	  450
-#define PULSE_LONG	  900
-#define PULSE_FOOTER  3000
-#define PULSE_50	  750//(PULSE_SHORT+(PULSE_LONG-PULSE_SHORT)/2)
-
-#define LEARN_REPEATS       4
-#define NORMAL_REPEATS      4
 #define PULSE_MULTIPLIER    2
-#define AVG_PULSE_LENGTH    PULSE_SHORT
-#define MIN_PULSE_LENGTH    AVG_PULSE_LENGTH-80
-#define MAX_PULSE_LENGTH    AVG_PULSE_LENGTH+260
+#define MIN_PULSE_LENGTH    407
+#define AVG_PULSE_LENGTH    400
+#define MAX_PULSE_LENGTH    572
 #define RAW_LENGTH          42
-
+#define FOOTER_MULTIPLIER   6
 static int validate(void) 
 {
-	logprintf(LOG_DEBUG, "byron_validate() rawlen=%d byron_sx_chime->raw[byron_sx_chime->rawlen-1]=%d, byron_sx_chime->raw[0]=%d", byron_sx_chime->rawlen, byron_sx_chime->raw[byron_sx_chime->rawlen-1], byron_sx_chime->raw[0]);
-	if(byron_sx_chime->rawlen == RAW_LENGTH) {
-		if(byron_sx_chime->raw[byron_sx_chime->rawlen-1] >= (int)(PULSE_FOOTER*0.9) &&
-			 byron_sx_chime->raw[byron_sx_chime->rawlen-1] <= (int)(PULSE_FOOTER*1.5) &&
-			 byron_sx_chime->raw[0] >= MIN_PULSE_LENGTH &&
-			 byron_sx_chime->raw[0] <= MAX_PULSE_LENGTH) {
-		return 0;
+	logprintf(LOG_DEBUG, "byron_validate() rawlen=%d byron_by_chime->raw[byron_by_chime->rawlen-1]=%d, byron_by_chime->raw[0]=%d", byron_by_chime->rawlen, byron_by_chime->raw[byron_by_chime->rawlen-1], byron_by_chime->raw[0]);
+	if(byron_by_chime->rawlen == RAW_LENGTH) 
+	{
+		if(byron_by_chime->raw[byron_by_chime->rawlen-1] >= (int)(MIN_PULSE_LENGTH*FOOTER_MULTIPLIER) &&
+			 byron_by_chime->raw[byron_by_chime->rawlen-1] <= (int)(MAX_PULSE_LENGTH*FOOTER_MULTIPLIER) &&
+			 byron_by_chime->raw[0] >= MIN_PULSE_LENGTH &&
+			 byron_by_chime->raw[0] <= MAX_PULSE_LENGTH)
+	    {
+		    return 0;
 		}
 	}
 	return -1;
@@ -80,11 +75,10 @@ static int validate(void)
 
 static void createMessage(int sys, int unit, int bell) 
 {
-	byron_sx_chime->message = json_mkobject();
-	json_append_member(byron_sx_chime->message, "systemcode", json_mknumber(sys, 0));
-	json_append_member(byron_sx_chime->message, "unitcode", json_mknumber(unit, 0));
-	json_append_member(byron_sx_chime->message, "id", json_mknumber(bell, 0));
-	byron_sx_chime->txrpt = NORMAL_REPEATS;
+	byron_by_chime->message = json_mkobject();
+	json_append_member(byron_by_chime->message, "systemcode", json_mknumber(sys, 0));
+	json_append_member(byron_by_chime->message, "unitcode", json_mknumber(unit, 0));
+	json_append_member(byron_by_chime->message, "id", json_mknumber(bell, 0));
 }
 
 static void parseCode(void) 
@@ -93,17 +87,16 @@ static void parseCode(void)
 	int x = 0;
 
 
-	if(byron_sx_chime->rawlen>RAW_LENGTH) 
+	if(byron_by_chime->rawlen>RAW_LENGTH) 
 	{
-		logprintf(LOG_ERR, "byron_sx_chime: parsecode - invalid parameter passed (rawlen) %d", byron_sx_chime->rawlen);
+		logprintf(LOG_ERR, "byron_by_chime: parsecode - invalid parameter passed (rawlen) %d", byron_by_chime->rawlen);
 	}
 	else
 	{
-		for(x = 0; x < byron_sx_chime->rawlen-1; x += 2) 
+		for(x = 0; x < byron_by_chime->rawlen-1; x += 2) 
 		{
-			logprintf(LOG_DEBUG,"byron: [%d]", byron_sx_chime->raw[x+1]);
-			int longPulse = (x==0)?PULSE_50-50:PULSE_50;	//1st pulse sometimes short??
-			if(byron_sx_chime->raw[x+1] > longPulse) 
+			logprintf(LOG_DEBUG,"byron: [%d]", byron_by_chime->raw[x+1]);
+			if(byron_by_chime->raw[x+1] > ((int)((double)MIN_PULSE_LENGTH*((double)PULSE_MULTIPLIER))))
 			{
 				binary[x/2] = 1;
 			} 
@@ -126,8 +119,8 @@ static void createZero(int s, int e)
 	int i;
 	for(i = s; i <= e; i += 2) 
 	{
-		byron_sx_chime->raw[i] = PULSE_SHORT;
-		byron_sx_chime->raw[i+1] = PULSE_LONG;
+		byron_by_chime->raw[i] = AVG_PULSE_LENGTH;
+		byron_by_chime->raw[i+1] = AVG_PULSE_LENGTH * PULSE_MULTIPLIER;
 	}
 }
 
@@ -136,25 +129,25 @@ static void createOne(int s, int e)
 	int i;
 	for(i=s;i<=e;i+=2) 
 	{
-		byron_sx_chime->raw[i] = PULSE_LONG;
-		byron_sx_chime->raw[i+1] = PULSE_SHORT;
+		byron_by_chime->raw[i] = AVG_PULSE_LENGTH * PULSE_MULTIPLIER;
+		byron_by_chime->raw[i+1] = AVG_PULSE_LENGTH;
 	}
 }
 
 static void createHeader(void) 
 {
-	byron_sx_chime->raw[0] = PULSE_SHORT;
+	byron_by_chime->raw[0] = AVG_PULSE_LENGTH;
 }
 
 static void createFooter(void) 
 {
-	byron_sx_chime->raw[byron_sx_chime->rawlen-1] = PULSE_FOOTER;
+	byron_by_chime->raw[byron_by_chime->rawlen-1] = FOOTER_MULTIPLIER*AVG_PULSE_LENGTH;
 }
 
 static void clearCode(void) 
 {
 	createHeader();
-	createZero(1, byron_sx_chime->rawlen-3);
+	createZero(1, byron_by_chime->rawlen-3);
 }
 
 static void createSys(int sys)
@@ -236,11 +229,11 @@ static int createCode(JsonNode *code)
 
 	if( (sys == -1) || (unit == -1) || (id == -1))
 	{
-		logprintf(LOG_ERR, "byron_sx_chime: insufficient number of arguments (%d, %d, %d)", sys, unit, id);
+		logprintf(LOG_ERR, "byron_by_chime: insufficient number of arguments (%d, %d, %d)", sys, unit, id);
 	}
     else 
     {
-		byron_sx_chime->rawlen = RAW_LENGTH;
+		byron_by_chime->rawlen = RAW_LENGTH;
 		createMessage(sys, unit, id);
 		clearCode();
 		createSys(sys);
@@ -261,37 +254,35 @@ static void printHelp(void) {
 #if !defined(MODULE) && !defined(_WIN32)
 __attribute__((weak))
 #endif
-void byronSxChimeInit(void) {
+void byronByChimeInit(void) {
 
-	protocol_register(&byron_sx_chime);
-	protocol_set_id(byron_sx_chime, "byron_sx_chime");
-	protocol_device_add(byron_sx_chime, "byron_sx_chime", "Byron SX Doorbell");
-	byron_sx_chime->devtype = ALARM;
-	byron_sx_chime->hwtype = RF433;
-	byron_sx_chime->txrpt = NORMAL_REPEATS;			 // SHORT: GT-FSI-04a range: 620... 960
-	byron_sx_chime->rxrpt = NORMAL_REPEATS;
-	byron_sx_chime->minrawlen = RAW_LENGTH;
-	byron_sx_chime->maxrawlen = RAW_LENGTH;
-	byron_sx_chime->maxgaplen = 3200;//(int)(PULSE_FOOTER*1.1);//3200;//(int)(PULSE_FOOTER*0.9);
-	byron_sx_chime->mingaplen = 2800;//(int)(PULSE_FOOTER*0.96);//2800;//(int)(PULSE_FOOTER*1.1);
+	protocol_register(&byron_by_chime);
+	protocol_set_id(byron_by_chime, "byron_by_chime");
+	protocol_device_add(byron_by_chime, "byron_by_chime", "Byron BY Doorbell");
+	byron_by_chime->devtype = ALARM;
+	byron_by_chime->hwtype = RF433;
+	byron_by_chime->minrawlen = RAW_LENGTH;
+	byron_by_chime->maxrawlen = RAW_LENGTH;
+	byron_by_chime->maxgaplen = 3200;//MAX_PULSE_LENGTH * FOOTER_MULTIPLIER;//3200;//(int)(PULSE_FOOTER*1.1);//3200;//(int)(PULSE_FOOTER*0.9);
+	byron_by_chime->mingaplen = 2800;//MIN_PULSE_LENGTH * FOOTER_MULTIPLIER;//2800;//(int)(PULSE_FOOTER*0.96);//2800;//(int)(PULSE_FOOTER*1.1);
 
-	options_add(&byron_sx_chime->options, "s", "systemcode", OPTION_HAS_VALUE, DEVICES_ID, JSON_NUMBER, NULL, "^([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-5][0-9][0-9][0-9][0-9]|6[0-4][0-9][0-9][0-9]|65[0-4][0-9][0-9]|655[0-2][0-9]|6553[0-5])$");
-	options_add(&byron_sx_chime->options, "u", "unit", OPTION_HAS_VALUE, DEVICES_ID, JSON_NUMBER, NULL, "^([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-5][0-9][0-9][0-9][0-9]|6[0-4][0-9][0-9][0-9]|65[0-4][0-9][0-9]|655[0-2][0-9]|6553[0-5])$");
-	options_add(&byron_sx_chime->options, "i", "id", OPTION_HAS_VALUE, DEVICES_ID, JSON_NUMBER, NULL, "^([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-4])$");
+	options_add(&byron_by_chime->options, "s", "systemcode", OPTION_HAS_VALUE, DEVICES_ID, JSON_NUMBER, NULL, "^([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-5][0-9][0-9][0-9][0-9]|6[0-4][0-9][0-9][0-9]|65[0-4][0-9][0-9]|655[0-2][0-9]|6553[0-5])$");
+	options_add(&byron_by_chime->options, "u", "unit", OPTION_HAS_VALUE, DEVICES_ID, JSON_NUMBER, NULL, "^([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-5][0-9][0-9][0-9][0-9]|6[0-4][0-9][0-9][0-9]|65[0-4][0-9][0-9]|655[0-2][0-9]|6553[0-5])$");
+	options_add(&byron_by_chime->options, "i", "id", OPTION_HAS_VALUE, DEVICES_ID, JSON_NUMBER, NULL, "^([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-4])$");
 	
-	options_add(&byron_sx_chime->options, "0", "readonly", OPTION_HAS_VALUE, GUI_SETTING, JSON_NUMBER, (void *)0, "^[10]{1}$");
-	options_add(&byron_sx_chime->options, "0", "confirm", OPTION_HAS_VALUE, GUI_SETTING, JSON_NUMBER, (void *)0, "^[10]{1}$");
+	options_add(&byron_by_chime->options, "0", "readonly", OPTION_HAS_VALUE, GUI_SETTING, JSON_NUMBER, (void *)0, "^[10]{1}$");
+	options_add(&byron_by_chime->options, "0", "confirm", OPTION_HAS_VALUE, GUI_SETTING, JSON_NUMBER, (void *)0, "^[10]{1}$");
 
-	byron_sx_chime->parseCode=&parseCode;
-	byron_sx_chime->createCode=&createCode;
-	byron_sx_chime->printHelp=&printHelp;
-	byron_sx_chime->validate=&validate;
+	byron_by_chime->parseCode=&parseCode;
+	byron_by_chime->createCode=&createCode;
+	byron_by_chime->printHelp=&printHelp;
+	byron_by_chime->validate=&validate;
 }
 
 #if defined(MODULE) && !defined(_WIN32)
 void compatibility(struct module_t *module) 
 {
-	module->name = "byron_sx_chime";
+	module->name = "byron_by_chime";
 	module->version = "1.0";
 	module->reqversion = "6.0";
 	module->reqcommit = "84";
@@ -299,7 +290,7 @@ void compatibility(struct module_t *module)
 
 void init(void) 
 {
-	byronSxChimeInit();
+	byronByChimeInit();
 }
 #endif
 
